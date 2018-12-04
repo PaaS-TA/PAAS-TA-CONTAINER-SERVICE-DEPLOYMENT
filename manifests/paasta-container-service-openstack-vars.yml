@@ -1,0 +1,111 @@
+# INCEPTION OS USER NAME
+inception_os_user_name: "ubuntu"
+
+# RELEASE
+caas_projects_release_name: "paasta-container-service-projects-release"
+caas_projects_release_version: "1.0"
+
+# IAAS
+auth_url: 'http://<IAAS-IP>:5000/v3'
+openstack_domain: '<OPENSTACK_DOMAIN>'
+openstack_username: '<OPENSTACK_USERNAME>'
+openstack_password: '<OPENSTACK_PASSWORD>'
+openstack_project_id: '<OPENSTACK_PROJECT_ID>'
+region: '<OPENSTACK_REGION>'
+ignore-volume-az: true
+
+# STEMCELL
+stemcell_os: "ubuntu-trusty"
+stemcell_version: "3586.26"
+stemcell_alias: "trusty"
+
+# VM_TYPE
+vm_type_small: "small"
+vm_type_small_highmem_16GB: "small-highmem-16GB"
+vm_type_caas_small: "small"
+vm_type_caas_small_api: "minimal"
+
+# NETWORK
+service_private_networks_name: "default"
+service_public_networks_name: "vip"
+
+# IPS
+caas_master_public_url: "115.68.151.178"   # CAAS-MASTER-PUBLIC-URL
+haproxy_public_ips: "115.68.151.177"       # HAPROXY-PUBLIC-URL
+
+# CREDHUB
+credhub_server_url: "10.20.0.7:8844"       # Bosh credhub server URL
+credhub_admin_client_secret: "<CREDHUB_ADMIN_CLIENT_SECRET>"
+
+# CF
+cf_uaa_oauth_uri: "https://uaa.<DOMAIN>"
+cf_api_url: "https://api.<DOMAIN>"
+cf_uaa_oauth_client_id: "<CF_UAA_OAUTH_CLIENT_ID>"
+cf_uaa_oauth_client_secret: "<CF_UAA_OAUTH_CLIENT_SECRET>"
+
+# HAPROXY
+haproxy_http_port: 8080
+haproxy_azs: [z1]
+
+# MARIADB
+mariadb_port: "<MARIADB_PORT>"
+mariadb_azs: [z2]
+mariadb_persistent_disk_type: "10GB"
+mariadb_admin_user_id: "<MARIADB_ADMIN_USER_ID>"
+mariadb_admin_user_password: "<MARIADB_ADMIN_USER_PASSWORD>"
+mariadb_role_set_administrator_code_name: "Administrator"
+mariadb_role_set_administrator_code: "RS0001"
+mariadb_role_set_regular_user_code_name: "Regular User"
+mariadb_role_set_regular_user_code: "RS0002"
+mariadb_role_set_init_user_code_name: "Init User"
+mariadb_role_set_init_user_code: "RS0003"
+
+# DASHBOARD
+caas_dashboard_instances: 1
+caas_dashboard_port: 8091
+caas_dashboard_azs: [z3]
+caas_dashboard_management_security_enabled: false
+caas_dashboard_logging_level: "INFO"
+
+# API
+caas_api_instances: 1
+caas_api_port: 3333
+caas_api_azs: [z1]
+caas_api_management_security_enabled: false
+caas_api_logging_level: "INFO"
+
+# COMMON API
+caas_common_api_instances: 1
+caas_common_api_port: 3334
+caas_common_api_azs: [z2]
+caas_common_api_logging_level: "INFO"
+
+# SERVICE BROKER
+caas_service_broker_instances: 1
+caas_service_broker_port: 8888
+caas_service_broker_azs: [z3]
+
+# (OPTIONAL) PRIVATE IMAGE REPOSITORY
+private_image_repository_release_name: "private-image-repository-release"
+private_image_repository_release_version: "1.0"
+private_image_repository_azs: [z1]
+private_image_repository_port: 5000
+private_image_repository_root_directory: "/var/lib/docker-registry"
+private_image_repository_user_name: "<PRIVATE_IMAGE_REPOSITORY_USER_NAME>"
+private_image_repository_user_password: "$2y$05$4l7G8WyToNODwYwjHyXDnu5aB3wvKuIeipgoF.CUuGLzsaZkUEsxS" # cloudfoundry (encoding by Bcrypt)
+private_image_repository_public_url: "115.68.151.99"     # PRIVATE-IMAGE-REPOSITORY-PUBLIC-URL
+private_image_repository_persistent_disk_type: "10GB"
+
+# ADDON
+caas_apply_addons_azs: [z2]
+
+# MASTER
+caas_master_backend_port: 8443
+caas_master_port: 8443
+caas_master_azs: [z3]
+caas_master_persistent_disk_type: 5120
+
+# WORKER
+caas_worker_instances: 3
+caas_worker_azs: [z1,z2,z3]
+

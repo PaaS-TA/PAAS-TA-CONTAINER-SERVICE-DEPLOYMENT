@@ -1,0 +1,42 @@
+- type: replace
+  path: /releases/-
+  value: 
+    name: ((private_image_repository_release_name))
+    url: file:///home/((inception_os_user_name))/workspace/paasta-4.0/release/service/((private_image_repository_release_name)).tgz
+    version: ((private_image_repository_release_version))
+
+- type: replace
+  path: /instance_groups/-
+  value:
+    name: private-image-repository
+    instances: 1
+    networks:
+    - name: ((service_private_networks_name))
+    - name: ((service_public_networks_name))
+      default: [dns, gateway]
+      static_ips: ((private_image_repository_public_url))
+    azs: ((private_image_repository_azs))
+    vm_type: ((vm_type_small))
+    stemcell: ((stemcell_alias))
+    persistent_disk_type: ((private_image_repository_persistent_disk_type))
+    update:
+      max_in_flight: 1
+      serial: true
+    jobs:
+    - name: private-image-repository
+      release: ((private_image_repository_release_name))
+      instances: 1
+      properties:
+        image_repository:
+          port: ((private_image_repository_port))
+          storage:
+            filesystem:
+              rootdirectory: ((private_image_repository_root_directory))
+            delete_enabled: true
+          http:
+            http2_disabled: false
+          auth:
+            enabled: true
+            username: ((private_image_repository_user_name))
+            password: ((private_image_repository_user_password))
+
