@@ -1,23 +1,20 @@
 - path: /releases/name=kubo/url
   type: replace
-  value: file:///home/((inception_os_user_name))/workspace/paasta-4.0/release/service/kubo-release.tgz
-  version: 0.19.0
+  value: file:///home/((inception_os_user_name))/workspace/paasta-5.0/release/service/kubo-release-0.34.1.tgz
 - path: /releases/name=cfcr-etcd/url
   type: replace
-  value: file:///home/((inception_os_user_name))/workspace/paasta-4.0/release/service/cfcr-etcd-release-1.3.tgz
-  version: '1.3'
+  value: file:///home/((inception_os_user_name))/workspace/paasta-5.0/release/service/cfcr-etcd-release-1.11.1.tgz
 - path: /releases/name=docker/url
   type: replace
-  value: file:///home/((inception_os_user_name))/workspace/paasta-4.0/release/service/docker-32.0.0.tgz
-  version: 32.0.0
+  value: file:///home/((inception_os_user_name))/workspace/paasta-5.0/release/service/docker-35.2.1.tgz
 - path: /releases/name=bosh-dns/url
   type: replace
-  value: file:///home/((inception_os_user_name))/workspace/paasta-4.0/release/service/bosh-dns-release-1.5.0.tgz
-  version: 1.5.0
+  value: file:///home/((inception_os_user_name))/workspace/paasta-5.0/release/service/bosh-dns-release-1.12.0.tgz
 - path: /releases/name=bpm/url
   type: replace
-  value: file:///home/((inception_os_user_name))/workspace/paasta-4.0/release/service/bpm-release-0.6.0.tgz
-  version: 0.6.0
+  value: file:///home/((inception_os_user_name))/workspace/paasta-5.0/release/service/bpm-release-1.0.4.tgz
 - path: /releases/name=((caas_projects_release_name))/url
   type: replace
-  value: file:///home/((inception_os_user_name))/workspace/paasta-4.0/release/service/((caas_projects_release_name)).tgz
+  value: file:///home/((inception_os_user_name))/workspace/paasta-5.0/release/service/((caas_projects_release_name)).tgz
+
+

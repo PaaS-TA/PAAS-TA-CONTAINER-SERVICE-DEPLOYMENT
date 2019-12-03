@@ -1,0 +1,983 @@
+name: ((deployment_name))
+releases:
+- name: kubo
+  url: file:///home/((inception_os_user_name))/workspace/paasta-((paasta_version))/release/service/((cfcr_release_name))-((cfcr_release_version)).tgz
+  version: ((cfcr_release_version))
+- name: cfcr-etcd
+  url: file:///home/((inception_os_user_name))/workspace/paasta-((paasta_version))/release/service/cfcr-etcd-1.11.1.tgz
+  version: 1.11.1
+- name: docker
+  url: file:///home/((inception_os_user_name))/workspace/paasta-((paasta_version))/release/service/docker-35.2.1.tgz
+  version: 35.2.1
+- name: bpm
+  url: file:///home/((inception_os_user_name))/workspace/paasta-((paasta_version))/release/service/bpm-1.0.4.tgz
+  version: 1.0.4
+- name: bosh-dns
+  version: 1.12.0
+  url: file:///home/((inception_os_user_name))/workspace/paasta-((paasta_version))/release/service/bosh-dns-release-1.12.0.tgz
+- name: ((caas_projects_release_name))
+  url: file:///home/((inception_os_user_name))/workspace/paasta-((paasta_version))/release/service/((caas_projects_release_name))-((caas_projects_release_version)).tgz
+  version: ((caas_projects_release_version))
+
+stemcells:
+- alias: ((stemcell_alias))
+  os: ((stemcell_os))
+  version: ((stemcell_version))
+
+addons:
+- name: bosh-dns
+  include:
+    stemcells:
+    - os: ((stemcell_os))
+  jobs:
+  - name: bosh-dns
+    release: bosh-dns
+    properties:
+      api:
+        server:
+          tls: ((/dns_api_server_tls))
+        client:
+          tls: ((/dns_api_client_tls))
+      cache:
+        enabled: true
+      health:
+        enabled: true
+        server:
+          tls: ((/dns_healthcheck_server_tls))
+        client:
+          tls: ((/dns_healthcheck_client_tls))
+- name: bosh-dns-aliases
+  jobs:
+  - name: kubo-dns-aliases
+    release: kubo
+###################
+
+instance_groups:
+- name: apply-addons
+  instances: 1
+  networks:
+  - name: ((service_private_networks_name))
+  azs: ((caas_apply_addons_azs))
+  lifecycle: errand
+  jobs:
+  - name: apply-specs
+    release: kubo
+    properties:
+      addons:
+      - coredns
+      - metrics-server
+      - kubernetes-dashboard
+      api-token: ((kubelet-password))
+      admin-username: admin
+      admin-password: ((kubo-admin-password))
+      tls:
+        kubernetes: ((tls-kubernetes))
+        kubernetes-dashboard: ((tls-kubernetes-dashboard))
+        metrics-server: ((tls-metrics-server))
+    
+  stemcell: ((stemcell_alias))
+  vm_type: ((vm_type_small))
+
+- name: master
+  instances: 1
+  networks:
+  - name: ((service_private_networks_name))
+  - name: ((service_public_networks_name))  
+  azs: ((caas_master_azs))
+  jobs:
+  - name: docker
+    release: docker
+    properties:
+      bridge: cni0
+      default_ulimits:
+      - nofile=1048576
+      env: {}
+      flannel: true
+      ip_masq: false
+      iptables: false
+      live_restore: true
+      log_level: error
+      log_options:
+      - max-size=128m
+      - max-file=2
+      storage_driver: overlay2
+      store_dir: /var/vcap/data
+  - name: docker-images
+    release: ((caas_projects_release_name))
+  - name: bpm
+    release: bpm
+  - name: flanneld
+    release: kubo
+    properties:
+      tls:
+        etcdctl:
+          ca: ((tls-etcdctl-flanneld.ca))
+          certificate: ((tls-etcdctl-flanneld.certificate))
+          private_key: ((tls-etcdctl-flanneld.private_key))    
+  - name: kube-proxy
+    properties:
+      api-token: ((kube-proxy-password))
+      kube-proxy-configuration:
+        apiVersion: kubeproxy.config.k8s.io/v1alpha1
+        clientConnection:
+          kubeconfig: /var/vcap/jobs/kube-proxy/config/kubeconfig
+        clusterCIDR: 10.200.0.0/16
+        iptables:
+          masqueradeAll: false
+          masqueradeBit: 14
+          minSyncPeriod: 0s
+          syncPeriod: 30s
+        kind: KubeProxyConfiguration
+        mode: iptables
+        portRange: ""
+      tls:
+        kubernetes: ((tls-kubernetes))
+    release: kubo
+  - name: kube-apiserver
+    release: kubo
+    properties:
+      admin-password: ((kubo-admin-password))
+      admin-username: admin
+      audit-policy:
+        apiVersion: audit.k8s.io/v1beta1
+        kind: Policy
+        rules:
+        - level: None
+          resources:
+          - group: ""
+            resources:
+            - endpoints
+            - services
+            - services/status
+          users:
+          - system:kube-proxy
+          verbs:
+          - watch
+        - level: None
+          resources:
+          - group: ""
+            resources:
+            - nodes
+            - nodes/status
+          users:
+          - kubelet
+          verbs:
+          - get
+        - level: None
+          resources:
+          - group: ""
+            resources:
+            - nodes
+            - nodes/status
+          userGroups:
+          - system:nodes
+          verbs:
+          - get
+        - level: None
+          namespaces:
+          - kube-system
+          resources:
+          - group: ""
+            resources:
+            - endpoints
+          users:
+          - system:kube-controller-manager
+          - system:kube-scheduler
+          - system:serviceaccount:kube-system:endpoint-controller
+          verbs:
+          - get
+          - update
+        - level: None
+          resources:
+          - group: ""
+            resources:
+            - namespaces
+            - namespaces/status
+            - namespaces/finalize
+          users:
+          - system:apiserver
+          verbs:
+          - get
+        - level: None
+          resources:
+          - group: metrics.k8s.io
+          users:
+          - system:kube-controller-manager
+          verbs:
+          - get
+          - list
+        - level: None
+          nonResourceURLs:
+          - /healthz*
+          - /version
+          - /swagger*
+        - level: None
+          resources:
+          - group: ""
+            resources:
+            - events
+        - level: Request
+          omitStages:
+          - RequestReceived
+          resources:
+          - group: ""
+            resources:
+            - nodes/status
+            - pods/status
+          userGroups:
+          - system:nodes
+          verbs:
+          - update
+          - patch
+        - level: Request
+          omitStages:
+          - RequestReceived
+          users:
+          - system:serviceaccount:kube-system:namespace-controller
+          verbs:
+          - deletecollection
+        - level: Metadata
+          omitStages:
+          - RequestReceived
+          resources:
+          - group: ""
+            resources:
+            - secrets
+            - configmaps
+          - group: authentication.k8s.io
+            resources:
+            - tokenreviews
+        - level: Request
+          omitStages:
+          - RequestReceived
+          resources:
+          - group: ""
+          - group: admissionregistration.k8s.io
+          - group: apiextensions.k8s.io
+          - group: apiregistration.k8s.io
+          - group: apps
+          - group: authentication.k8s.io
+          - group: authorization.k8s.io
+          - group: autoscaling
+          - group: batch
+          - group: certificates.k8s.io
+          - group: extensions
+          - group: metrics.k8s.io
+          - group: networking.k8s.io
+          - group: policy
+          - group: rbac.authorization.k8s.io
+          - group: settings.k8s.io
+          - group: storage.k8s.io
+          verbs:
+          - get
+          - list
+          - watch
+        - level: RequestResponse
+          omitStages:
+          - RequestReceived
+          resources:
+          - group: ""
+          - group: admissionregistration.k8s.io
+          - group: apiextensions.k8s.io
+          - group: apiregistration.k8s.io
+          - group: apps
+          - group: authentication.k8s.io
+          - group: authorization.k8s.io
+          - group: autoscaling
+          - group: batch
+          - group: certificates.k8s.io
+          - group: extensions
+          - group: metrics.k8s.io
+          - group: networking.k8s.io
+          - group: policy
+          - group: rbac.authorization.k8s.io
+          - group: settings.k8s.io
+          - group: storage.k8s.io
+        - level: Metadata
+          omitStages:
+          - RequestReceived
+      k8s-args:
+        audit-log-maxage: 0
+        audit-log-maxbackup: 7
+        audit-log-maxsize: 49
+        audit-log-path: /var/vcap/sys/log/kube-apiserver/audit.log
+        audit-policy-file: /var/vcap/jobs/kube-apiserver/config/audit_policy.yml
+        authorization-mode: RBAC
+        client-ca-file: /var/vcap/jobs/kube-apiserver/config/kubernetes-ca.pem
+        disable-admission-plugins: []
+        enable-admission-plugins: []
+        enable-aggregator-routing: true
+        enable-bootstrap-token-auth: true
+        enable-swagger-ui: true
+        etcd-cafile: /var/vcap/jobs/kube-apiserver/config/etcd-ca.crt
+        etcd-certfile: /var/vcap/jobs/kube-apiserver/config/etcd-client.crt
+        etcd-keyfile: /var/vcap/jobs/kube-apiserver/config/etcd-client.key
+        kubelet-client-certificate: /var/vcap/jobs/kube-apiserver/config/kubelet-client-cert.pem
+        kubelet-client-key: /var/vcap/jobs/kube-apiserver/config/kubelet-client-key.pem
+        proxy-client-cert-file: /var/vcap/jobs/kube-apiserver/config/kubernetes.pem
+        proxy-client-key-file: /var/vcap/jobs/kube-apiserver/config/kubernetes-key.pem
+        requestheader-allowed-names: aggregator
+        requestheader-client-ca-file: /var/vcap/jobs/kube-apiserver/config/kubernetes-ca.pem
+        requestheader-extra-headers-prefix: X-Remote-Extra-
+        requestheader-group-headers: X-Remote-Group
+        requestheader-username-headers: X-Remote-User
+        runtime-config: api/v1
+        secure-port: 8443
+        service-account-key-file: /var/vcap/jobs/kube-apiserver/config/service-account-public-key.pem
+        service-cluster-ip-range: 10.100.200.0/24
+        storage-media-type: application/json
+        tls-cert-file: /var/vcap/jobs/kube-apiserver/config/kubernetes.pem
+        tls-private-key-file: /var/vcap/jobs/kube-apiserver/config/kubernetes-key.pem
+        token-auth-file: /var/vcap/jobs/kube-apiserver/config/tokens.csv
+        v: 2
+      kube-controller-manager-password: ((kube-controller-manager-password))
+      kube-proxy-password: ((kube-proxy-password))
+      kube-scheduler-password: ((kube-scheduler-password))
+      kubelet-drain-password: ((kubelet-drain-password))
+      kubelet-password: ((kubelet-password))
+      service-account-public-key: ((service-account-key.public_key))
+      tls:
+        kubelet-client: ((tls-kubelet-client))
+        kubernetes:
+          ca: ((tls-kubernetes.ca))
+          certificate: ((tls-kubernetes.certificate))((tls-kubernetes.ca))
+          private_key: ((tls-kubernetes.private_key))
+  - name: kube-controller-manager
+    release: kubo
+    properties:
+      api-token: ((kube-controller-manager-password))
+      cluster-signing: ((kubo_ca))
+      k8s-args:
+        cluster-signing-cert-file: /var/vcap/jobs/kube-controller-manager/config/cluster-signing-ca.pem
+        cluster-signing-key-file: /var/vcap/jobs/kube-controller-manager/config/cluster-signing-key.pem
+        kubeconfig: /var/vcap/jobs/kube-controller-manager/config/kubeconfig
+        root-ca-file: /var/vcap/jobs/kube-controller-manager/config/ca.pem
+        service-account-private-key-file: /var/vcap/jobs/kube-controller-manager/config/service-account-private-key.pem
+        terminated-pod-gc-threshold: 100
+        tls-cert-file: /var/vcap/jobs/kube-controller-manager/config/kube-controller-manager-cert.pem
+        tls-private-key-file: /var/vcap/jobs/kube-controller-manager/config/kube-controller-manager-private-key.pem
+        use-service-account-credentials: true
+        v: 2
+      service-account-private-key: ((service-account-key.private_key))
+      tls:
+        kube-controller-manager: ((tls-kube-controller-manager))
+        kubernetes: ((tls-kubernetes))
+  - name: kube-scheduler
+    release: kubo
+    properties:
+      api-token: ((kube-scheduler-password))
+      kube-scheduler-configuration:
+        apiVersion: kubescheduler.config.k8s.io/v1alpha1
+        clientConnection:
+          kubeconfig: /var/vcap/jobs/kube-scheduler/config/kubeconfig
+        disablePreemption: false
+        kind: KubeSchedulerConfiguration
+      tls:
+        kubernetes: ((tls-kubernetes))
+  - name: kubernetes-roles
+    release: kubo
+    properties:
+      admin-password: ((kubo-admin-password))
+      admin-username: admin
+      tls:
+        kubernetes: ((tls-kubernetes))
+  - name: etcd
+    release: cfcr-etcd
+    properties:
+      etcd:
+        dns_suffix: etcd.cfcr.internal
+      tls:
+        etcd:
+          ca: ((etcd_ca.certificate))
+          certificate: ((tls-etcd-v0-29-0.certificate))
+          private_key: ((tls-etcd-v0-29-0.private_key))
+        etcdctl:
+          ca: ((tls-etcdctl-v0-29-0.ca))
+          certificate: ((tls-etcdctl-v0-29-0.certificate))
+          private_key: ((tls-etcdctl-v0-29-0.private_key))
+        etcdctl-root:
+          ca: ((tls-etcdctl-v0-29-0.ca))
+          certificate: ((tls-etcdctl-root.certificate))
+          private_key: ((tls-etcdctl-root.private_key))
+        peer:
+          ca: ((tls-etcd-v0-29-0.ca))
+          certificate: ((tls-etcd-v0-29-0.certificate))
+          private_key: ((tls-etcd-v0-29-0.private_key))
+      users:
+      - name: root
+        password: ((etcd_user_root_password))
+        versions:
+        - v2
+      - name: flanneld
+        password: ((etcd_user_flanneld_password))
+        permissions:
+          read:
+          - /coreos.com/network/*
+          write:
+          - /coreos.com/network/*
+        versions:
+        - v2 
+  - name: prometheus
+    release: kubo
+  - name: smoke-tests
+    release: kubo
+  stemcell: ((stemcell_alias))
+  vm_type: ((vm_type_small))
+  persistent_disk: ((caas_master_persistent_disk_type))
+
+- name: worker
+  persistent_disk_type: 100GB  
+  instances: ((caas_worker_instances))
+  networks:
+  - name: ((service_private_networks_name))
+  azs: ((caas_worker_azs))
+  jobs:
+  - name: flanneld
+    release: kubo
+    properties:
+      tls:
+        etcdctl:
+          ca: ((tls-etcdctl-flanneld.ca))
+          certificate: ((tls-etcdctl-flanneld.certificate))
+          private_key: ((tls-etcdctl-flanneld.private_key))
+  - name: docker
+    release: docker
+    properties:
+      bridge: cni0
+      default_ulimits:
+      - nofile=1048576
+      env: {}
+      flannel: true
+      ip_masq: false
+      iptables: false
+      live_restore: true
+      log_level: error
+      log_options:
+      - max-size=128m
+      - max-file=2
+      storage_driver: overlay2
+  - name: docker-repository-setting
+    release: ((caas_projects_release_name))
+    properties:
+      caas_master_public_url: ((caas_master_public_url))
+  - name: kubernetes-dependencies
+    release: kubo
+  - name: kubelet
+    release: kubo
+    properties:
+      api-token: ((kubelet-password))
+      drain-api-token: ((kubelet-drain-password))
+      k8s-args:
+        cni-bin-dir: /var/vcap/jobs/kubelet/packages/cni/bin
+        container-runtime: docker
+        docker: unix:///var/vcap/sys/run/docker/docker.sock
+        docker-endpoint: unix:///var/vcap/sys/run/docker/docker.sock
+        kubeconfig: /var/vcap/jobs/kubelet/config/kubeconfig
+        network-plugin: cni
+        root-dir: /var/vcap/data/kubelet
+      kubelet-configuration:
+        apiVersion: kubelet.config.k8s.io/v1beta1
+        authentication:
+          anonymous:
+            enabled: true
+          x509:
+            clientCAFile: /var/vcap/jobs/kubelet/config/kubelet-client-ca.pem
+        authorization:
+          mode: Webhook
+        clusterDNS:
+        - 169.254.0.2   #10.100.200.10
+        clusterDomain: cluster.local
+        failSwapOn: false
+        kind: KubeletConfiguration
+        serializeImagePulls: false
+        tlsCertFile: /var/vcap/jobs/kubelet/config/kubelet.pem
+        tlsPrivateKeyFile: /var/vcap/jobs/kubelet/config/kubelet-key.pem
+      tls:
+        kubelet:
+          ca: ((tls-kubelet.ca))
+          certificate: ((tls-kubelet.certificate))((tls-kubelet.ca))
+          private_key: ((tls-kubelet.private_key))
+        kubelet-client-ca:
+          certificate: ((tls-kubelet-client.ca))
+        kubernetes: ((tls-kubernetes))
+  - name: kube-proxy
+    properties:
+      api-token: ((kube-proxy-password))
+      kube-proxy-configuration:
+        apiVersion: kubeproxy.config.k8s.io/v1alpha1
+        clientConnection:
+          kubeconfig: /var/vcap/jobs/kube-proxy/config/kubeconfig
+        clusterCIDR: 10.200.0.0/16
+        iptables:
+          masqueradeAll: false
+          masqueradeBit: 14
+          minSyncPeriod: 0s
+          syncPeriod: 30s
+        kind: KubeProxyConfiguration
+        mode: iptables
+        portRange: ""
+      tls:
+        kubernetes: ((tls-kubernetes))
+    release: kubo
+  stemcell: ((stemcell_alias))
+  vm_type: ((vm_type_small_highmem_16GB_100GB))                 #vm_type_small_highmem_16GB))
+
+- name: haproxy
+  instances: 1
+  networks:
+  - name: ((service_public_networks_name))
+  - name: ((service_private_networks_name))
+  azs: ((haproxy_azs))
+  vm_type: ((vm_type_caas_small))
+  stemcell: ((stemcell_alias))
+  update:
+    max_in_flight: 1
+    serial: true
+  jobs:
+  - name: haproxy
+    release: ((caas_projects_release_name))
+    properties:
+      public_ip: ((haproxy_public_url))
+      http_port: ((haproxy_http_port))
+
+- name: mariadb
+  instances: 1
+  networks:
+  - name: ((service_private_networks_name))
+  azs: ((mariadb_azs))
+  vm_type: ((vm_type_caas_small))
+  stemcell: ((stemcell_alias))
+  persistent_disk_type: ((mariadb_persistent_disk_type))
+  update:
+    max_in_flight: 1
+    serial: true
+  jobs:
+  - name: mariadb
+    release: ((caas_projects_release_name))
+    properties:
+      port: ((mariadb_port))
+      admin_user:
+        id: ((mariadb_admin_user_id))
+        password: ((mariadb_admin_user_password))
+      role_set:
+        administrator_code_name: ((mariadb_role_set_administrator_code_name))
+        administrator_code: ((mariadb_role_set_administrator_code))
+        regular_user_code_name: ((mariadb_role_set_regular_user_code_name))
+        regular_user_code: ((mariadb_role_set_regular_user_code))
+        init_user_code_name: ((mariadb_role_set_init_user_code_name))
+        init_user_code: ((mariadb_role_set_init_user_code))
+
+- name: container-service-dashboard
+  instances: ((caas_dashboard_instances))
+  networks:
+  - name: ((service_private_networks_name))
+  azs: ((caas_dashboard_azs))
+  vm_type: ((vm_type_caas_small))
+  stemcell: ((stemcell_alias))
+  update:
+    max_in_flight: 1
+    serial: true
+  jobs:
+  - name: container-service-dashboard
+    release: ((caas_projects_release_name))
+    properties:
+      server:
+        port: ((caas_dashboard_port))
+      management:
+        security:
+          enabled: ((caas_dashboard_management_security_enabled))
+      spring:
+        freemarker:
+          template-loader-path: classpath:/templates/
+      logging:
+        level:
+          ROOT: ((caas_dashboard_logging_level))
+        path: classpath:logback-spring.xml
+        file: logs/application.log
+      private:
+        registry:
+          url: ((caas_master_public_url))  
+      cf:
+        uaa:
+          oauth:
+            info:
+              uri: ((cf_uaa_oauth_uri))/userinfo
+            token:
+              check:
+                uri: ((cf_uaa_oauth_uri))/check_token
+              access:
+                uri: ((cf_uaa_oauth_uri))/oauth/token
+            logout:
+              url: ((cf_uaa_oauth_uri))/logout
+            authorization:
+              uri: ((cf_uaa_oauth_uri))/oauth/authorize
+            client:
+              id: ((cf_uaa_oauth_client_id))
+              secret: ((cf_uaa_oauth_client_secret))
+        api:
+          url: ((cf_api_url))
+      java_opts: '-XX:MaxMetaspaceSize=104857K -Xss349K -Xms681574K -XX:MetaspaceSize=104857K -Xmx681574K'
+
+- name: container-service-api
+  instances: ((caas_api_instances))
+  networks:
+  - name: ((service_private_networks_name))
+  azs: ((caas_api_azs))
+  vm_type: ((vm_type_caas_small_api))
+  stemcell: ((stemcell_alias))
+  update:
+    max_in_flight: 1
+    serial: true
+  jobs:
+  - name: container-service-api
+    release: ((caas_projects_release_name))
+    properties:
+      server:
+        port: ((caas_api_port))
+      management:
+        security:
+          enabled: ((caas_api_management_security_enabled))
+      logging:
+        level:
+          ROOT: ((caas_api_logging_level))
+        path: classpath:logback-spring.xml
+        file: logs/application.log
+      authorization:
+        id: admin
+        password: PaaS-TA
+      java_opts: '-XX:MaxMetaspaceSize=104857K -Xss349K -Xms681574K -XX:MetaspaceSize=104857K -Xmx681574K'
+
+- name: container-service-common-api
+  instances: ((caas_common_api_instances))
+  networks:
+  - name: ((service_private_networks_name))
+  azs: ((caas_common_api_azs))
+  vm_type: ((vm_type_caas_small_api))
+  stemcell: ((stemcell_alias))
+  update:
+    max_in_flight: 1
+    serial: true
+  jobs:
+  - name: container-service-common-api
+    release: ((caas_projects_release_name))
+    properties:
+      server:
+        port: ((caas_common_api_port))
+      spring:
+        datasource:
+          username: ((mariadb_admin_user_id))
+          password: ((mariadb_admin_user_password))
+          validationQuery: SELECT 1
+          driver_class_name: com.mysql.cj.jdbc.Driver
+        jpa:
+          database: mysql
+          hibernate:
+            ddl-auto: none
+            naming:
+              strategy: org.hibernate.cfg.EJB3NamingStrategy
+          generate-ddl: false
+          properties:
+            hibernate:
+              dialect: org.hibernate.dialect.MySQLInnoDBDialect
+              show_sql: true
+              format_sql: true
+              use_sql_comments: true
+      logging:
+        level:
+          ROOT: ((caas_common_api_logging_level))
+        path: classpath:logback-spring.xml
+        file: logs/application.log
+      authorization:
+        id: admin
+        password: PaaS-TA
+      java_opts: '-XX:MaxMetaspaceSize=104857K -Xss349K -Xms681574K -XX:MetaspaceSize=104857K -Xmx681574K'
+
+- name: container-service-broker
+  instances: ((caas_service_broker_instances))
+  networks:
+  - name: ((service_private_networks_name))
+  azs: ((caas_service_broker_azs))
+  vm_type: ((vm_type_caas_small_api))
+  stemcell: ((stemcell_alias))
+  update:
+    max_in_flight: 1
+    serial: true
+  jobs:
+  - name: container-service-broker
+    release: ((caas_projects_release_name))
+    properties:
+      credhub:
+        server_url: ((credhub_server_url))
+        admin_client_secret: ((credhub_admin_client_secret))
+      caas:
+        cluster_name: ((director_name))/((deployment_name))
+        api_server_url: https://((caas_master_public_url)):((caas_master_port))
+        service_broker_auth_secret: 'YWRtaW46Y2xvdWRmb3VuZHJ5' # DO NOT MODIFY
+        init_command: "/var/vcap/jobs/container-service-broker/script/set_caas_service_info.sh"
+        exit_code: 'caas_exit'
+      datasource:
+        driver_class_name: com.mysql.jdbc.Driver
+        username: ((mariadb_admin_user_id))
+        password: ((mariadb_admin_user_password))
+      jpa:
+        hibernate_ddl_auto: none
+        show_sql: true
+        database_platform: org.hibernate.dialect.MySQL5InnoDBDialect
+      freemarker:
+        template-loader-path: classpath:/templates/
+      server:
+        port: ((caas_service_broker_port))
+      java_opts: '-XX:MaxMetaspaceSize=104857K -Xss349K -Xms681574K -XX:MetaspaceSize=104857K -Xmx681574K'
+      logging:
+        config: classpath:logback.xml
+        level:
+          org:
+            openpaas:
+              servicebroker: INFO
+            hibernate: info
+      serviceDefinition:
+        bindable: false
+        desc: "For Container Service Plans, You can choose plan about CPU, Memory, disk."
+        id: 8a3f2d14-5283-487f-b6c8-6663639ad8b1_test
+        name: container-service
+        image_url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAMAAABHPGVmAAAC/VBMVEVHcEwxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQxbOQ1/RrDAAAA/nRSTlMAA/wI/SAC/gHfBvoEBwsJ6BD3GPUK+QXt7vMS4fIT+A3wFOQl+93sGhUb8Tnr6sX2Dir0g+Dm2+fXDBa23JQXuxEPzx8dVrpH4lfl7zJEOhnp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"
+        plan1:
+          desc: "2 CPUs, 2GB Memory (free)"
+          id: f02690d6-6965-4756-820e-3858111ed674test
+          name: Micro
+          type: A
+          cpu : 2
+          memory : 2GB
+          disk : 10GB
+          weight: 1
+        plan2:
+          desc: "4 CPUs, 6GB Memory (free)"
+          id: a5213929-885f-414a-801f-c66ddb5e48f1test
+          name: Small
+          type: B
+          cpu : 4
+          memory : 6GB
+          disk : 20GB
+          weight: 2
+        plan3:
+          desc: "8 CPUs, 12GB Memory (free)"
+          id: 056d05b6-4039-40ec-8619-e68490b79255test
+          name: Advanced
+          type: C
+          cpu : 8
+          memory : 12GB
+          disk : 40GB
+          weight: 3
+        planupdatable: 'true'
+        tags: "Container Service,Containers as a Service"
+      dashboard:
+        url: http://((haproxy_public_url)):((caas_dashboard_port))/caas/intro/overview/
+      auth:
+        id: admin
+        password: cloudfoundry
+- name: container-jenkins-broker
+  instances: ((jenkins_broker_instances))
+  networks:
+  - name: ((service_private_networks_name))
+  azs: ((jenkins_broker_azs))
+  vm_type: ((vm_type_caas_small_api))
+  stemcell: ((stemcell_alias))
+  update:
+    max_in_flight: 1
+    serial: true
+  jobs:
+  - name: container-jenkins-broker
+    release: ((caas_projects_release_name))
+    properties:
+      logging:
+        level:
+          ROOT: ((caas_api_logging_level))
+        path: classpath:logback-spring.xml
+        file: logs/application.log
+      jenkins:
+        serviceDefinition:
+          plan1:
+            id: 1653cb80-0077-11ea-aaef-0800200c9a66
+            name: jenkins_20GB
+            desc: Installing Jenkins in Docker in a Container
+            type: A
+          bullet:
+            desc: 100
+            name: 100
+          desc: Installing Jenkins in Docker in a Container 20GB
+          name: container-jenkins-service
+          id: 0ef99f90-0077-11ea-aaef-0800200c9a66
+        namespace: ((jenkins_namespace))
+        namespace_file_path: ((jenkins_namespace_file))
+        secret_file_path: ((jenkins_secret_file))
+      server:
+        port: ((jenkins_broker_port))
+      jpa:
+        show_sql: true
+        hibernate_ddl_auto: none
+      datasource:
+        username: ((mariadb_admin_user_id))
+        password: ((mariadb_admin_user_password))
+      caas:
+        repository:
+          ip: ((private_image_repository_public_url))
+          port: ((private_image_repository_port))
+        master_ip: ((caas_master_public_url))
+
+- name: private-image-repository
+  instances: 1
+  networks:
+  - name: ((service_private_networks_name))
+  - name: ((service_public_networks_name))
+  azs: ((private_image_repository_azs))
+  vm_type: ((vm_type_small))
+  stemcell: ((stemcell_alias))
+  persistent_disk_type: ((private_image_repository_persistent_disk_type))
+  update:
+    max_in_flight: 1
+    serial: true
+  jobs:
+  - name: private-image-repository
+    release: ((caas_projects_release_name))
+    instances: 1
+    properties:
+      image_repository:
+        port: ((private_image_repository_port))
+        storage:
+          filesystem:
+            rootdirectory: ((private_image_repository_root_directory))
+          delete_enabled: true
+        http:
+          http2_disabled: false
+        auth:
+          enabled: true
+          username: "admin"
+
+        
+update:
+  canaries: 1
+  canary_watch_time: 10000-300000
+  max_in_flight: 1
+  update_watch_time: 10000-300000
+variables:
+- name: kubo-admin-password
+  type: password
+- name: kubelet-password
+  type: password
+- name: kubelet-drain-password
+  type: password
+- name: kube-proxy-password
+  type: password
+- name: kube-controller-manager-password
+  type: password
+- name: kube-scheduler-password
+  type: password
+- name: etcd_user_root_password
+  type: password
+- name: etcd_user_flanneld_password
+  type: password
+- name: kubo_ca
+  options:
+    common_name: ca
+    is_ca: true
+  type: certificate
+- name: tls-kubelet
+  options:
+    alternative_names: []
+    ca: kubo_ca
+    common_name: kubelet.cfcr.internal
+    organization: system:nodes
+  type: certificate
+- name: tls-kubelet-client
+  options:
+    ca: kubo_ca
+    common_name: kube-apiserver.cfcr.internal
+    extended_key_usage:
+    - client_auth
+    organization: system:masters
+  type: certificate
+- name: tls-kubernetes
+  options:
+    alternative_names:
+    - ((caas_master_public_url))
+    - 10.100.200.1
+    - localhost
+    - kubernetes
+    - kubernetes.default
+    - kubernetes.default.svc
+    - kubernetes.default.svc.cluster.local
+    - master.cfcr.internal
+    ca: kubo_ca
+    common_name: master.cfcr.internal
+    organization: system:masters
+  type: certificate
+- name: service-account-key
+  type: rsa
+- name: tls-kube-controller-manager
+  options:
+    alternative_names:
+    - localhost
+    - 127.0.0.1
+    ca: kubo_ca
+    common_name: kube-controller-manager
+    extended_key_usage:
+    - server_auth
+    key_usage:
+    - digital_signature
+    - key_encipherment
+  type: certificate
+- name: etcd_ca
+  options:
+    common_name: etcd.ca
+    is_ca: true
+  type: certificate
+- name: tls-etcd-v0-29-0
+  options:
+    ca: etcd_ca
+    common_name: '*.etcd.cfcr.internal'
+    extended_key_usage:
+    - client_auth
+    - server_auth
+  type: certificate
+- name: tls-etcdctl-v0-29-0
+  options:
+    ca: etcd_ca
+    common_name: etcdClient
+    extended_key_usage:
+    - client_auth
+  type: certificate
+- name: tls-etcdctl-root
+  options:
+    ca: etcd_ca
+    common_name: root
+    extended_key_usage:
+    - client_auth
+  type: certificate
+- name: tls-etcdctl-flanneld
+  options:
+    ca: etcd_ca
+    common_name: flanneld
+    extended_key_usage:
+    - client_auth
+  type: certificate
+- name: tls-metrics-server
+  options:
+    alternative_names:
+    - metrics-server.kube-system.svc
+    ca: kubo_ca
+    common_name: metrics-server
+  type: certificate
+- name: kubernetes-dashboard-ca
+  options:
+    common_name: ca
+    is_ca: true
+  type: certificate
+- name: tls-kubernetes-dashboard
+  options:
+    alternative_names: []
+    ca: kubernetes-dashboard-ca
+    common_name: kubernetesdashboard.n
+  type: certificate
+
+features:
+  use_dns_addresses: true

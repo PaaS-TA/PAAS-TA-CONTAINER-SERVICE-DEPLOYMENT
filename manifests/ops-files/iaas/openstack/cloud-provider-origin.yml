@@ -5,17 +5,14 @@
     release: kubo
     properties:
       cloud-provider:
-        type: vsphere
-      cloud-config:
-        Global:
-          datacenter: ((vcenter_dc))
-          datastore: ((vcenter_ds))
-          password: ((vcenter_master_password))
-          server: ((vcenter_ip))
-          user: ((vcenter_master_user))
-          working-dir: /((vcenter_dc))/vm/((vcenter_vms))/((director_uuid))
-        Disk:
-          scsicontrollertype: pvscsi
+        type: openstack
+        openstack:
+          auth-url: ((auth_url))
+          domain-name: ((openstack_domain))
+          password: ((openstack_password))
+          region: ((region))
+          tenant-id: ((openstack_project_id))
+          username: ((openstack_username))
     provides:
       cloud-provider: {as: master-cloud-provider}
 
@@ -35,12 +32,35 @@
     cloud-provider: {from: master-cloud-provider}
 
 - type: replace
+  path: /instance_groups/name=worker/jobs/-
+  value:
+    name: cloud-provider
+    release: kubo
+    properties:
+      cloud-provider:
+        type: openstack
+        openstack:
+          auth-url: ((auth_url))
+          domain-name: ((openstack_domain))
+          password: ((openstack_password))
+          region: ((region))
+          tenant-id: ((openstack_project_id))
+          username: ((openstack_username))
+    provides:
+      cloud-provider: {as: worker-cloud-provider}
+
+- type: replace
+  path: /instance_groups/name=worker/jobs/name=kubelet/consumes?
+  value:
+    cloud-provider: {from: worker-cloud-provider}
+
+- type: replace
   path: /instance_groups/name=worker/jobs/name=kubelet/properties/cloud-provider?
-  value: vsphere
+  value: openstack
 
 - type: replace
   path: /instance_groups/name=worker/jobs/name=kube-proxy/properties/cloud-provider?
-  value: vsphere
+  value: openstack
 
 - type: replace
   path: /instance_groups/name=apply-addons/jobs/name=apply-specs/consumes?

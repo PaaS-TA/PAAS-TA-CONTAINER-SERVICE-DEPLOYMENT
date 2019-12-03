@@ -1,0 +1,35 @@
+- type: replace
+  path: /instance_groups/name=haproxy/networks/name=((service_private_networks_name))
+  value:
+    name: ((service_private_networks_name))
+
+- type: replace
+  path: /instance_groups/name=haproxy/networks/name=((service_public_networks_name))
+  value:
+    name: ((service_public_networks_name))
+    default: [dns, gateway]
+    static_ips: ((haproxy_public_url))
+
+- type: replace
+  path: /instance_groups/name=master/networks/name=((service_private_networks_name))
+  value:
+    name: ((service_private_networks_name))
+
+- type: replace
+  path: /instance_groups/name=master/networks/name=((service_public_networks_name))
+  value:
+    name: ((service_public_networks_name))
+    default: [dns, gateway]
+    static_ips: ((caas_master_public_url))
+
+- type: replace
+  path: /instance_groups/name=private-image-repository/networks/name=((service_private_networks_name))
+  value:
+    name: ((service_private_networks_name))
+
+- type: replace
+  path: /instance_groups/name=private-image-repository/networks/name=((service_public_networks_name))
+  value:
+    name: ((service_public_networks_name))
+    default: [dns, gateway]
+    static_ips: ((private_image_repository_public_url))
