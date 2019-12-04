@@ -93,8 +93,8 @@ caas_service_broker_azs: [z6]
 #PRIVATE IMAGE REPOSITORY
 private_image_repository_azs: [z7]
 private_image_repository_port: 5000
-private_image_repository_root_directory: "/var/vcap/data/private-image-repository-release"
-private_image_repository_public_url: "xxx.xxx.xxx.xxx"
+private_image_repository_root_directory: "/var/vcap/data/private-image-repository"
+private_image_repository_public_url: "<PRIVATE_IMAGE_REPOSITORY_PUBLIC_URL>"
 private_image_repository_persistent_disk_type: "10GB"
 
 # ADDON
@@ -113,7 +113,7 @@ caas_worker_azs: [z4,z5,z6]
 # JENKINS
 jenkins_broker_instances: 1
 jenkins_broker_port: 8787
-jenkins_broker_azs: [z7]
+jenkins_broker_azs: [z6]
 jenkins_namespace: "paasta-jenkins"
 jenkins_secret_file: "/var/vcap/jobs/container-jenkins-broker/data/docker-secret.yml"
 jenkins_namespace_file: "/var/vcap/jobs/container-jenkins-broker/data/create-namespace.yml"
