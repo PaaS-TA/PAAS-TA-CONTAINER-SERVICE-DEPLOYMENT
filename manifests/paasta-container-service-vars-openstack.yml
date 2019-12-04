@@ -76,7 +76,7 @@ caas_dashboard_logging_level: "INFO"
 # API
 caas_api_instances: 1
 caas_api_port: 3333
-caas_api_azs: [z7]
+caas_api_azs: [z5]
 caas_api_management_security_enabled: false
 caas_api_logging_level: "INFO"
 
@@ -99,7 +99,7 @@ private_image_repository_public_url: "<PRIVATE_IMAGE_REPOSITORY_PUBLIC_URL>"
 private_image_repository_persistent_disk_type: "10GB"
 
 # ADDON
-caas_apply_addons_azs: [z7]
+caas_apply_addons_azs: [z5]
 
 # MASTER
 caas_master_backend_port: 8443
@@ -109,7 +109,7 @@ caas_master_persistent_disk_type: 51200
 
 # WORKER
 caas_worker_instances: 3
-caas_worker_azs: [z5,z6,z7]
+caas_worker_azs: [z4,z5,z6]
 
 # JENKINS
 jenkins_broker_instances: 1
