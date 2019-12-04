@@ -7,8 +7,6 @@
 - docker :: v35.2.1
 - kubo-release :: v0.34.1
 - paasta-container-service-projects-release :: v2.0
-- (Optional) private-image-repository-release :: v1.0
-  - https://github.com/PaaS-TA/PRIVATE-IMAGE-REPOSITORY-DEPLOYMENT.git
 
 ## Install Guide
 - https://github.com/PaaS-TA/Guide-5.0-Ravioli/blob/master/service-guide/tools/PAAS-TA_CONTAINER_SERVICE_INSTALL_GUIDE_V2.0.md
