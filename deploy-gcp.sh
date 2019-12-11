@@ -5,7 +5,7 @@ export CAAS_DEPLOYMENT_NAME='paasta-container-service'
 export CAAS_BOSH2_NAME='micro-bosh'
 export CAAS_BOSH2_UUID=`bosh int <(bosh -e ${CAAS_BOSH2_NAME} environment --json) --path=/Tables/0/Rows/0/uuid`
 
-# RESET CREDENTIAL
+# RESET CERTIFICATES
 credhub delete -n /${CAAS_BOSH2_NAME}/${CAAS_DEPLOYMENT_NAME}/tls-kubernetes
 credhub delete -n /${CAAS_BOSH2_NAME}/${CAAS_DEPLOYMENT_NAME}/tls-kubelet
 
